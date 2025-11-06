@@ -57,9 +57,7 @@ export default function DefectDetector() {
     });
   }, []);
 
-  const loadSample = useCallback(() => {
-    setImageUrl("/samples-small/Gemini_Generated_Image_bia6iabia6iabia6.jpg");
-  }, []);
+  // Removed sample loader per request
 
   useEffect(() => {
     if (!imageUrl) return;
@@ -284,13 +282,7 @@ export default function DefectDetector() {
             className="block w-full rounded-md border border-zinc-300 p-2 text-sm dark:border-zinc-700"
           />
         </div>
-        <button
-          type="button"
-          onClick={loadSample}
-          className="h-10 rounded-md border border-zinc-300 px-3 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-        >
-          Load sample
-        </button>
+        
         <button
           type="button"
           onClick={onReset}
@@ -334,7 +326,7 @@ export default function DefectDetector() {
       <div className="flex flex-col gap-2">
         {!imageElement && (
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Choose an image or load the sample to begin.
+            Choose an image to begin.
           </p>
         )}
         {imageElement && (

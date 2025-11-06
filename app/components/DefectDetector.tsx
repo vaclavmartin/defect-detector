@@ -22,6 +22,7 @@ type DetectionResult = {
     centerX: number;
     centerY: number;
     radius: number;
+    edges?: Array<{ x: number; y: number }>; // border pixels
   }>;
 };
 
@@ -41,6 +42,8 @@ export default function DefectDetector() {
   const [minContrastPercent, setMinContrastPercent] = useState<number>(12);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [result, setResult] = useState<DetectionResult | null>(null);
+  const [showCircles, setShowCircles] = useState<boolean>(true);
+  const [showBorders, setShowBorders] = useState<boolean>(true);
 
   const hiddenCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -75,24 +78,37 @@ export default function DefectDetector() {
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (!res) return;
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = "rgba(220, 38, 38, 0.9)"; // red-600
-    ctx.fillStyle = "rgba(220, 38, 38, 0.15)";
     ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, Helvetica";
     ctx.textBaseline = "top";
-    ctx.fillStyle = "rgba(220, 38, 38, 0.12)";
 
-    for (const comp of res.components) {
-      ctx.beginPath();
-      ctx.arc(comp.centerX, comp.centerY, comp.radius, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.stroke();
-      ctx.fill();
-      ctx.fillStyle = "rgba(220, 38, 38, 1)";
-      ctx.fillText(`#${comp.id} (${comp.pixelCount})`, comp.centerX + comp.radius + 4, comp.centerY - 6);
-      ctx.fillStyle = "rgba(220, 38, 38, 0.12)";
+    // Borders (green): draw single-pixel squares for each edge pixel
+    if (showBorders) {
+      ctx.fillStyle = "#22c55e"; // green-500
+      for (const comp of res.components) {
+        if (!comp.edges || comp.edges.length === 0) continue;
+        for (const pt of comp.edges) {
+          ctx.fillRect(pt.x, pt.y, 1, 1);
+        }
+      }
     }
-  }, []);
+
+    // Circles and labels (red)
+    if (showCircles) {
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(220, 38, 38, 0.9)"; // red-600
+      ctx.fillStyle = "rgba(220, 38, 38, 0.12)";
+      for (const comp of res.components) {
+        ctx.beginPath();
+        ctx.arc(comp.centerX, comp.centerY, comp.radius, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fill();
+        ctx.fillStyle = "rgba(220, 38, 38, 1)";
+        ctx.fillText(`#${comp.id} (${comp.pixelCount})`, comp.centerX + comp.radius + 4, comp.centerY - 6);
+        ctx.fillStyle = "rgba(220, 38, 38, 0.12)";
+      }
+    }
+  }, [showBorders, showCircles]);
 
   const analyze = useCallback(async () => {
     if (!imageElement) return;
@@ -217,18 +233,43 @@ export default function DefectDetector() {
       c.sumY += y;
     }
 
+    // Build edges (border pixels) per component
+    const edgesMap: Record<number, Array<{ x: number; y: number }>> = {};
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = y * width + x;
+        const lab = labels[i];
+        if (lab === 0) continue;
+        // Edge if any 4-neighbor is background or outside bounds
+        const left = x === 0 || labels[i - 1] === 0;
+        const right = x === width - 1 || labels[i + 1] === 0;
+        const up = y === 0 || labels[i - width] === 0;
+        const down = y === height - 1 || labels[i + width] === 0;
+        if (left || right || up || down) {
+          (edgesMap[lab] ??= []).push({ x, y });
+        }
+      }
+    }
+
     const filtered = Object.values(components)
       .filter(c => c.pixelCount >= minSpotSizePx)
       .map(c => {
         const centerX = c.sumX / c.pixelCount;
         const centerY = c.sumY / c.pixelCount;
         const radius = 0.5 * Math.max(c.maxX - c.minX + 1, c.maxY - c.minY + 1);
+        // Attach edges (sample if extremely large to keep drawing fast)
+        let edges = edgesMap[c.id] || [];
+        if (edges.length > 20000) {
+          const factor = Math.ceil(edges.length / 20000);
+          edges = edges.filter((_, idx) => idx % factor === 0);
+        }
         return {
           id: c.id,
           pixelCount: c.pixelCount,
           centerX,
           centerY,
           radius,
+          edges,
         };
       });
 
@@ -250,6 +291,11 @@ export default function DefectDetector() {
     if (!debouncedParams.imageUrl || !imageElement) return;
     analyze();
   }, [debouncedParams, imageElement, analyze]);
+
+  // Redraw overlays when toggles or result change
+  useEffect(() => {
+    drawOverlays(result);
+  }, [result, showCircles, showBorders, drawOverlays]);
 
   const onReset = useCallback(() => {
     setImageUrl(null);
@@ -321,6 +367,25 @@ export default function DefectDetector() {
             onChange={(e) => setMinContrastPercent(Number(e.target.value))}
           />
         </div>
+      </div>
+
+      <div className="flex items-center gap-6">
+        <label className="inline-flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={showCircles}
+            onChange={(e) => setShowCircles(e.target.checked)}
+          />
+          Show circles
+        </label>
+        <label className="inline-flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={showBorders}
+            onChange={(e) => setShowBorders(e.target.checked)}
+          />
+          Show borders
+        </label>
       </div>
 
       <div className="flex flex-col gap-2">

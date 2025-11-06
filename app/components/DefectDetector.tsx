@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import sample1 from "@/samples-small/Gemini_Generated_Image_bia6iabia6iabia6.jpg";
+import sample2 from "@/samples-small/Gemini_Generated_Image_tffgn9tffgn9tffg.jpg";
+import sample3 from "@/samples-small/Gemini_Generated_Image_ym3dulym3dulym3d.jpg";
 
 type DetectedComponent = {
   id: number;
@@ -61,6 +64,19 @@ export default function DefectDetector() {
   }, []);
 
   // Removed sample loader per request
+
+  const getImageSrc = useCallback((img: string | { src: string }): string => {
+    return typeof img === "string" ? img : img.src;
+  }, []);
+
+  const loadSample = useCallback((img: string | { src: string }) => {
+    const url = getImageSrc(img);
+    setImageUrl(prev => {
+      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+      return url;
+    });
+    setResult(null);
+  }, [getImageSrc]);
 
   useEffect(() => {
     if (!imageUrl) return;
@@ -328,7 +344,31 @@ export default function DefectDetector() {
             className="block w-full rounded-md border border-zinc-300 p-2 text-sm dark:border-zinc-700"
           />
         </div>
-        
+
+        <div className="flex items-end gap-2">
+          <button
+            type="button"
+            onClick={() => loadSample(sample1)}
+            className="h-8 rounded-md border border-zinc-300 px-2 text-xs font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+          >
+            Load sample 1
+          </button>
+          <button
+            type="button"
+            onClick={() => loadSample(sample2)}
+            className="h-8 rounded-md border border-zinc-300 px-2 text-xs font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+          >
+            Load sample 2
+          </button>
+          <button
+            type="button"
+            onClick={() => loadSample(sample3)}
+            className="h-8 rounded-md border border-zinc-300 px-2 text-xs font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+          >
+            Load sample 3
+          </button>
+        </div>
+
         <button
           type="button"
           onClick={onReset}

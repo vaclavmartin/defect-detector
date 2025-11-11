@@ -324,10 +324,54 @@ export default function DefectDetector() {
     }
   }, []);
 
-  const containerStyle = useMemo(
-    () => ({ width: imageElement?.naturalWidth ?? 0, height: imageElement?.naturalHeight ?? 0 }),
-    [imageElement]
-  );
+  const [displayScale, setDisplayScale] = useState<number>(1);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  // Calculate scale to fit viewport
+  useEffect(() => {
+    if (!imageElement || !imageElement.naturalWidth || !imageElement.naturalHeight) {
+      setDisplayScale(1);
+      return;
+    }
+    
+    const updateScale = () => {
+      // Get available width (accounting for padding: 24px on each side = 48px total)
+      // And max-w-6xl constraint (1152px) with padding inside (24px each side)
+      const viewportWidth = window.innerWidth;
+      const maxContainerWidth = 1152; // max-w-6xl
+      const containerPadding = 48; // 24px on each side
+      const availableWidth = Math.min(viewportWidth, maxContainerWidth) - containerPadding;
+      
+      const naturalWidth = imageElement.naturalWidth;
+      
+      // Calculate scale to fit width, leaving some margin for safety
+      const maxDisplayWidth = Math.max(100, availableWidth - 16); // small extra margin, minimum 100px
+      const scale = naturalWidth > 0 ? Math.min(1, maxDisplayWidth / naturalWidth) : 1;
+      
+      setDisplayScale(scale);
+    };
+    
+    updateScale();
+    window.addEventListener('resize', updateScale);
+    return () => window.removeEventListener('resize', updateScale);
+  }, [imageElement]);
+
+  const containerStyle = useMemo(() => {
+    if (!imageElement) return { width: 0, height: 0 };
+    return {
+      width: imageElement.naturalWidth * displayScale,
+      height: imageElement.naturalHeight * displayScale,
+      maxWidth: '100%',
+    };
+  }, [imageElement, displayScale]);
+
+  const canvasStyle = useMemo(() => {
+    if (!imageElement) return {};
+    return {
+      transform: `scale(${displayScale})`,
+      transformOrigin: 'top left',
+    };
+  }, [displayScale]);
 
   return (
     <div className="flex w-full flex-col gap-6">
@@ -435,7 +479,7 @@ export default function DefectDetector() {
           </p>
         )}
         {imageElement && (
-          <div className="relative inline-block" style={containerStyle}>
+          <div className="relative inline-block overflow-hidden" style={containerStyle} ref={containerRef}>
             {/* Image as background layer */}
             {/* Using overlay canvas only; the image is drawn underneath via CSS background */}
             <div
@@ -443,13 +487,16 @@ export default function DefectDetector() {
                 width: imageElement.naturalWidth,
                 height: imageElement.naturalHeight,
                 backgroundImage: `url(${imageUrl ?? ""})`,
-                backgroundSize: "contain",
+                backgroundSize: `${imageElement.naturalWidth}px ${imageElement.naturalHeight}px`,
                 backgroundRepeat: "no-repeat",
+                transform: `scale(${displayScale})`,
+                transformOrigin: 'top left',
               }}
             />
             <canvas
               ref={overlayCanvasRef}
               className="absolute left-0 top-0"
+              style={canvasStyle}
               width={imageElement.naturalWidth}
               height={imageElement.naturalHeight}
               aria-label="Defect overlay"

@@ -9,6 +9,29 @@ cd "$ROOT_DIR"
 PORT="${PORT:-3000}"
 URL="http://localhost:${PORT}"
 
+# Ensure no previous dev servers are still running on the target port
+if command -v lsof >/dev/null 2>&1; then
+  EXISTING_PIDS="$(lsof -ti tcp:${PORT} || true)"
+  if [ -n "${EXISTING_PIDS}" ]; then
+    echo "Terminating existing processes on port ${PORT}: ${EXISTING_PIDS}"
+    kill ${EXISTING_PIDS} >/dev/null 2>&1 || true
+    # Grace period
+    for i in {1..10}; do
+      sleep 0.3
+      REMAINING="$(lsof -ti tcp:${PORT} || true)"
+      if [ -z "${REMAINING}" ]; then
+        break
+      fi
+    done
+    # Force kill if still present
+    REMAINING="$(lsof -ti tcp:${PORT} || true)"
+    if [ -n "${REMAINING}" ]; then
+      echo "Forcibly killing remaining processes on port ${PORT}: ${REMAINING}"
+      kill -9 ${REMAINING} >/dev/null 2>&1 || true
+    fi
+  fi
+fi
+
 echo "Starting Next.js dev server on ${URL}…"
 
 # Start dev server in background
